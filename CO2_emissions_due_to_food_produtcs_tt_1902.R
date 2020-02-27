@@ -1,4 +1,4 @@
-# Librairies --------------------------------------------------------------
+# Libraries --------------------------------------------------------------
 
 library("dplyr") # dataset manipulation
 library("tidylog") # provide feedback about dplyr operations
@@ -11,9 +11,6 @@ library("forcats") # factor manipulation
 library("tidyr") 
 library("GGally") # parallel coordinate chart
 library("cowplot") # combine plots together / export plots
-
-library('ggsci') # color palette
-
 
 # Data --------------------------------------------------------------------
 
