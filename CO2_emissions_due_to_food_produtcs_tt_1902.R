@@ -269,7 +269,7 @@ plot_meat$group <- factor(plot_meat$group)
   labs(
     x = "",
     y = "Consumption (kg/person/year)",
-    title = "Meet consumption",
+    title = "Meat consumption",
     subtitle = "The higlighted lines represent the countries with the highest CO2 emissions"
   ))
 
