@@ -214,8 +214,6 @@ ggplot(data = dumbbell2, aes(
       panel.border = element_blank()
     )
 
-# Focus sur les consommateurs de viande -----------------------------------
-
 # Focus on top meat consumers ---------------------------------------------
 
 # top 10 countries with cO2 emissions
