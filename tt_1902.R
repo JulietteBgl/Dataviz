@@ -2,25 +2,26 @@
 
 library("dplyr") # dataset manipulation
 library("tidylog") # provide feedback about dplyr operations
+library("rnaturalearth") # get world data
 library("ggplot2") # data visualisation
+library("sf") # to simplify maps
+library('echarts4r') # dynamic maps
 library("ggalt") # dumbell chart
 library("forcats") # factor manipulation
+library("tidyr") 
+library("GGally") # parallel coordinate chart
+library("cowplot") # combine plots together / export plots
+
 library('ggsci') # color palette
-library("cowplot") # export plots
-library("forcats") # factor manipulation
-library('sf')
-library('echarts4r')
-library("GGally")
-library("tidyr")
-library("rnaturalearth") # to get world data
+
 
 # Data --------------------------------------------------------------------
 
-# Dataset TT
+# Load data
 tuesdata <- tidytuesdayR::tt_load('2020-02-18') 
 food_consumption <- tuesdata[[1]]
 
-# ajout de la catégorie d'aliment + recodage pays
+# Add high level food category and recode USA/Czech Republic/South Korea
 food_consumption <- food_consumption %>% 
   mutate(category = 
            case_when(food_category %in% c("Pork", "Poultry", "Beef", "Lamb & Goat") ~ "Meat",
@@ -34,31 +35,34 @@ food_consumption <- food_consumption %>%
                                   `South Korea`= "Korea")  
          )
 
-# ordre des facteurs
-food_consumption$category <- factor(food_consumption$category, levels = c("Meat", "Fish", "Eggs, Milk, Cheese", "Grains"))
+# Re-order factors
+food_consumption$category <- factor(food_consumption$category, 
+                                    levels = c("Meat", "Fish", "Eggs, Milk, Cheese", "Grains"))
 
-# Donnée aggrégée ---------------------------------------------------------
 
-# Pollution par pays
-pollution_par_pays <- food_consumption %>% 
+# Aggregated data ---------------------------------------------------------
+
+# CO2 emission per country
+pollution_per_country <- food_consumption %>% 
   group_by(country) %>% 
   summarise(consumption = sum(consumption),
             co2_emmission = sum(co2_emmission))
 
 # Pollution par catégorie et par pays
-pollution_par_pays_et_category <- food_consumption %>% 
+pollution_per_country_and_category <- food_consumption %>% 
   group_by(country, category) %>% 
   summarise(consumption = sum(consumption),
             co2_emmission = sum(co2_emmission))
 
 # Map ---------------------------------------------------------------------
 
-#world_map <- st_read('TidyTuesday/TM_WORLD_BORDERS-0.3/')
+# Load world data
 world_map <- ne_countries(scale = "medium", returnclass = "sf") 
 
+# Add world data to the previous dataframe
 food_consumption_map <- merge(
   x = world_map,
-  y = pollution_par_pays,
+  y = pollution_per_country,
   by.x = "name",
   by.y = "country",
   all.x = TRUE
@@ -67,11 +71,6 @@ food_consumption_map <- merge(
 # Remove Antartica
 food_consumption_map <- food_consumption_map %>%
   filter(geounit != "Antarctica")
-ggplot(data = map_test) + 
-  geom_sf(mapping = aes(fill = co2_emmission))
-
-# tests Mathieu 
-map_test <- st_simplify(food_consumption_map, dTolerance = 2, preserveTopology = T)
 
 # Map
 (map <- ggplot(data = food_consumption_map) + 
@@ -81,7 +80,6 @@ map_test <- st_simplify(food_consumption_map, dTolerance = 2, preserveTopology =
     fill = "CO2 emission\n (kg CO2/person/year)"
   ) +
     theme_void() +
-  #scale_fill_gradient(low = "#006600", high = "#990000", na.value = "grey") +
   theme(
     plot.background = element_rect(fill = "#f7f7f7", color = NA),
     panel.background = element_rect(fill = "#f7f7f7", color = NA),
@@ -89,50 +87,48 @@ map_test <- st_simplify(food_consumption_map, dTolerance = 2, preserveTopology =
     plot.title = element_text(hjust = 0.5, face = "plain" )
   ))
 
-# export plot
-save_plot(
-  filename = 'TidyTuesday/outputs/map.png',
-  plot = map,
-  base_height = 15,
-  base_width = 15 * 1.61
-)
+# test - use of st_simplify (library sf)
+map_test <- st_simplify(food_consumption_map, 
+                        dTolerance = 2, 
+                        preserveTopology = T)
 
-# Solution TT -------------------------------------------------------------
+ggplot(data = map_test) +
+  geom_sf(mapping = aes(fill = co2_emmission))
 
-pollution_par_pays %>%
+# Dynamic map with echarts ------------------------------------------------
+
+pollution_per_country %>%
   e_charts(country) %>%
   e_map(co2_emmission) %>%
   e_visual_map(min=0, max=2000) %>%
   e_title("Total CO2 emissions due to food products \n (kg CO2/person/year)", left = "center") %>%
-  e_theme("chalk") #chalk / infographic /halloween
+  e_theme("chalk")
 
-# Pays les plus pollueurs -------------------------------------------------
+# The most polluting countries --------------------------------------------
 
-pollution_par_pays %>% 
+pollution_per_country %>% 
   top_n(10, co2_emmission) %>% 
   arrange(desc(co2_emmission))
 
-# Top 5 des pays les plus pollueurs
-top_5 <- pollution_par_pays %>%  
+# Top 5 - most polluting countries
+top_5 <- pollution_per_country %>%  
   top_n(5, co2_emmission) %>% 
   arrange(desc(co2_emmission)) %>% 
   select(country) %>% 
   mutate(type = "top_5")
 
-# Bottom 5 des pays les moins pollueurs
-bottom_5 <- pollution_par_pays %>%  
+# Bottom 5 - least polluting countries
+bottom_5 <- pollution_per_country %>%  
   top_n(-5, co2_emmission) %>% 
   select(country) %>% 
   mutate(type = "bottom_5")
 
+# Pollution sources - per CO2 emission level ------------------------------
 
-# Sources de pollution selon niveau de pollution --------------------------
+# Dumbbell chart for the most polluting countries
 
-# Dumbbell
+theme_set(theme_classic())
 
-# Préparation des données
-
-# High 5
 dumbbell <- food_consumption %>%
   filter(country %in% top_5$country) %>%
   group_by(country, category) %>% 
@@ -142,9 +138,7 @@ dumbbell <- food_consumption %>%
   group_by(category) %>% 
   mutate(min_consumption = min(sum_consumption_country), max_consumption = max(sum_consumption_country))
 
-theme_set(theme_classic())
-
-(gg1 <- ggplot(data = dumbbell, aes(
+ggplot(data = dumbbell, aes(
     x = min_consumption,
     xend = max_consumption,
     y = fct_relevel(category, "Grains", "Eggs, Milk, Cheese","Fish", "Meat"), 
@@ -156,7 +150,6 @@ theme_set(theme_classic())
                 colour_xend = "#0e668b",
                 size_x = 2,
                 size_xend = 2) +
-  #scale_x_continuous(label = percent) +
   labs(
     x = "CO2 emission (Kg CO2/person/year)",
     y = NULL,
@@ -177,10 +170,9 @@ theme_set(theme_classic())
     axis.ticks = element_blank(),
     legend.position = "top",
     panel.border = element_blank()
-  )) 
+  )
 
-
-## Less 5
+# Dumbbell chart for the least polluting countries
 
 dumbbell2 <- food_consumption %>%
   filter(country %in% bottom_5$country) %>%
@@ -191,7 +183,7 @@ dumbbell2 <- food_consumption %>%
   group_by(category) %>% 
   mutate(min_consumption = min(sum_consumption_country), max_consumption = max(sum_consumption_country))
 
-(gg2 <- ggplot(data = dumbbell2, aes(
+ggplot(data = dumbbell2, aes(
   x = min_consumption,
   xend = max_consumption,
   y = fct_relevel(category, "Grains", "Eggs, Milk, Cheese","Fish", "Meat"), 
@@ -203,62 +195,6 @@ dumbbell2 <- food_consumption %>%
                   colour_xend = "#0e668b",
                   size_x = 2,
                   size_xend = 2) +
-    #scale_x_continuous(label = percent) +
-    labs(
-      x = "CO2 emission (Kg CO2/person/year)",
-      y = NULL,
-      title = "Distribution of C02 emission per type of food",
-      subtitle = "Min - Max C02 for the 5 countries with the lowest CO2 emission rates"
-    ) +
-    theme(
-      text = element_text(family = "Gibson", colour = "gray10"),
-      plot.title = element_text(hjust = 0.5, face = "plain"),
-      plot.subtitle = element_text(hjust = 0.5),
-      plot.background = element_rect(fill = "#f7f7f7"),
-      axis.line = element_line(color = "gray30"),
-      panel.background = element_rect(fill = "#f7f7f7"),
-      axis.title.x = element_text(hjust = 0.5),
-      panel.grid.minor = element_blank(),
-      panel.grid.major.y = element_blank(),
-      panel.grid.major.x = element_line(color = "grey", linetype = "dashed"),
-      axis.ticks = element_blank(),
-      legend.position = "top",
-      panel.border = element_blank()
-    )) 
-
-
-# Test both ---------------------------------------------------------------
-
-all_c <- rbind(top_5, bottom_5)
-
-dumbell3 <- merge(
-  x = all_c,
-  y = food_consumption,
-  by = "country"
-)
-
-dumbell3 <- dumbell3 %>%
-  group_by(country, category) %>% 
-  mutate(sum_consumption_country = sum(consumption),
-         sum_co2_country = sum(co2_emmission)) %>% 
-  ungroup() %>% 
-  group_by(category) %>% 
-  mutate(min_consumption = min(sum_consumption_country), max_consumption = max(sum_consumption_country))
-
-ggplot(data = dumbell3, aes(
-  x = min_consumption,
-  xend = max_consumption,
-  y = fct_relevel(category, "Grains", "Eggs, Milk, Cheese","Fish", "Meat"), 
-  group = category
-)) +
-  geom_point(aes(colour = type))
-    geom_dumbbell(color = "#a3c4dc",
-                  size = 1,
-                  colour_x = "#0e668b", 
-                  colour_xend = "#0e668b",
-                  size_x = 2,
-                  size_xend = 2) +
-    #scale_x_continuous(label = percent) +
     labs(
       x = "CO2 emission (Kg CO2/person/year)",
       y = NULL,
@@ -283,13 +219,15 @@ ggplot(data = dumbell3, aes(
 
 # Focus sur les consommateurs de viande -----------------------------------
 
-# top 10 pollueurs
-top_10 <- pollution_par_pays %>%  
+# Focus on top meat consumers ---------------------------------------------
+
+# top 10 countries with cO2 emissions
+top_10 <- pollution_per_country %>%  
   top_n(10, co2_emmission) %>% 
   arrange(desc(co2_emmission)) %>% 
   select(country)
 
-# préparation des données
+# data preparation
 plot_meat <- food_consumption %>% 
   filter(category == "Meat") %>% 
   group_by(country, food_category) %>% 
@@ -321,7 +259,6 @@ plot_meat$group <- factor(plot_meat$group)
     scale = "globalminmax"
   ) + 
   scale_color_manual(values=c( "#69b3a2", "#E8E8E8") ) +
- # theme_ipsum()+
   theme(
     legend.position="Default",
     plot.background = element_rect(fill = "#f7f7f7"),
@@ -333,7 +270,6 @@ plot_meat$group <- factor(plot_meat$group)
     text = element_text(family = "Gibson", colour = "gray20"),
     axis.text = element_text(family = "Gibson", size = 14, colour = "gray40"),
     axis.title = element_text(size = 12)
-    #axis.line = element_line(color = "gray30"),
   ) +
   labs(
     x = "",
@@ -342,8 +278,7 @@ plot_meat$group <- factor(plot_meat$group)
     subtitle = "The higlighted lines represent the countries with the highest CO2 emissions"
   ))
 
-
-# Lien entre émissions et conso -------------------------------------------
+# Link between emissions and consumption ----------------------------------
 
 food_consumption %>%
   filter(category == "Meat") %>%
@@ -352,9 +287,7 @@ food_consumption %>%
              color = food_category)) +
   geom_point(size = 0.7)
 
-# Meat
-
-levels(food_consumption$category) # OK
+# 1 - Meat
 
 (c1 <- food_consumption %>%
   arrange(desc(category)) %>%
@@ -365,8 +298,7 @@ levels(food_consumption$category) # OK
   labs(
     x = "Consumption",
     y = "CO2 emissions",
-    title = "Meat"#,
-    #subtitle = "Meat"
+    title = "Meat"
   ) +
   scale_colour_manual(values = c("#69b3a2", "gray90", "gray90", "gray90")) +
   theme(
@@ -392,10 +324,12 @@ levels(food_consumption$category) # OK
   annotate("text", x = 70, y = 150, family = "Gibson", size = 6, color = "gray40",
            label = "Poultry"))
 
-# Fish
+# 2 - Fish
+
 # reorder factors
 food_consumption_fish <- food_consumption
-food_consumption_fish$category <- factor(food_consumption$category, levels = c("Fish", "Meat", "Eggs, Milk, Cheese", "Grains"))
+food_consumption_fish$category <- factor(food_consumption$category, 
+                                         levels = c("Fish", "Meat", "Eggs, Milk, Cheese", "Grains"))
 
 (c2 <- food_consumption_fish %>%
   arrange(desc(category)) %>%
@@ -406,8 +340,7 @@ food_consumption_fish$category <- factor(food_consumption$category, levels = c("
   labs(
     x = "Consumption",
     y = "CO2 emissions",
-    title = "Fish"#,
-    #subtitle = "Fish"
+    title = "Fish"
   ) +
   scale_colour_manual(values = c("#69b3a2", "gray90", "gray90", "gray90")) +
   theme(
@@ -425,9 +358,9 @@ food_consumption_fish$category <- factor(food_consumption$category, levels = c("
     legend.position = "none"
   ))
 
-# Eggs and Cheese
+# 3 - Eggs and Cheese
 
-food_consumption_grains %>%
+food_consumption %>%
   filter(category == "Eggs, Milk, Cheese") %>%
   ggplot(aes(x = consumption,
              y = co2_emmission,
@@ -448,8 +381,7 @@ food_consumption_eggs$category <- factor(food_consumption$category,
   labs(
     x = "Consumption",
     y = "CO2 emissions",
-    title = "Eggs, Milk, Cheese"#,
-    #subtitle = "Eggs, Milk, Cheese"
+    title = "Eggs, Milk, Cheese"
   ) +
   scale_colour_manual(values = c("#69b3a2", "gray90", "gray90", "gray90")) +
   theme(
@@ -471,15 +403,14 @@ food_consumption_eggs$category <- factor(food_consumption$category,
   annotate("text", x = 40, y = 20, family = "Gibson", size = 6, color = "gray40",
            label = "Eggs"))
 
-# Grains
+# 4 - Grains
 
-food_consumption_grains %>%
+food_consumption %>%
   filter(category == "Grains") %>%
   ggplot(aes(x = consumption,
              y = co2_emmission,
              color = food_category)) +
   geom_point(size = 0.7)
-
 
 food_consumption_grains <- food_consumption
 food_consumption_grains$category <- factor(food_consumption$category, levels = c("Grains", "Fish", "Meat", "Eggs, Milk, Cheese"))
@@ -493,8 +424,7 @@ food_consumption_grains$category <- factor(food_consumption$category, levels = c
   labs(
     x = "Consumption",
     y = "CO2 emissions",
-    title = "Grains"#,
-    #subtitle = "Grains"
+    title = "Grains"
   ) +
   scale_colour_manual(values = c("#69b3a2", "gray90", "gray90", "gray90")) +
   theme(
@@ -520,11 +450,9 @@ food_consumption_grains$category <- factor(food_consumption$category, levels = c
   annotate("text", x = 150, y = 80, family = "Gibson", size = 6, color = "gray40",
            label = "Wheat"))
 
-# Mix plots
-plot_grid(c1, c2, c3, c4)
-
 # Final plot --------------------------------------------------------------
 
+# High level title
 title <- ggdraw() + 
   draw_label("CO2 EMISSIONS DUE TO FOOD PRODUCTS", 
              fontfamily = "Gibson", 
@@ -535,6 +463,7 @@ title <- ggdraw() +
     plot.background = element_rect(fill = "#f7f7f7")
   )
 
+# Maps title
 title2 <- ggdraw() + 
   draw_label("Total CO2 emissions due to food products", 
              fontfamily = "Gibson", 
@@ -546,6 +475,7 @@ title2 <- ggdraw() +
                                    )
   )
 
+# CO2/consumption title
 title3 <- ggdraw() + 
   draw_label("Relation between CO2 emission and consumption", 
              fontfamily = "Gibson", 
@@ -557,6 +487,7 @@ title3 <- ggdraw() +
                                    )
   )
 
+# Source
 source <- ggdraw() + 
   draw_label("Source: Nu3 | Dataviz: @JulietteBgl", 
              fontfamily = "Gibson", 
@@ -568,20 +499,21 @@ source <- ggdraw() +
     )
   )
 
+# Final image to export
 tt <- plot_grid(
   title,
   rel_heights=c(0.1, 1, 0.1),
   ncol = 1,
   plot_grid(
     ncol = 2,
-    # colonne de gauche
+    # left column
     plot_grid(
       ncol = 1,
       title2,
       rel_heights=c(0.2, 0.8, 1.2),
       map, 
       m),
-    # colonne de droite
+    # right column
     plot_grid(
       ncol = 1,
       title3,
@@ -592,7 +524,6 @@ tt <- plot_grid(
   source
   )
 
-
 # export plot
 save_plot(
   filename = 'TidyTuesday/outputs/tt_1902.png',
@@ -601,60 +532,46 @@ save_plot(
   base_width = 15 * 1.61
 )
 
-
-# To do
-# Cartes geo
-# chart relié sans la selection sur les tops consommateurs de viande
-# revoir les conclusions boeuf vs cheese
-# Grid plot de grid plots
-
-
-
-
-
-# AFC ---------------------------------------------------------------------
+# Correspondence analysis -------------------------------------------------
 
 library('FactoMineR')
-library('tidyr')
 library('factoextra')
 
-# long to wide
+# Long to wide
 afc <- spread(food_consumption %>% select(country, food_category, co2_emmission), 
               key = food_category, 
               value = co2_emmission)
 
-# Ajout de noms de lignes
+# Add columns names
 names <- afc[,1]
 afc <- afc[,-1]
 afc <- as.data.frame(afc)
 row.names(afc) <- names$country
 
-# Selection des pays
+# Select countries
 
-# Top 5 conso des pays dans chaque catégorie de food
+# Top 5 consumption - per country and food category
 top_5_food <- food_consumption %>% 
   group_by(food_category) %>% 
   arrange(desc(consumption)) %>% 
   mutate(rank = seq(n())) %>% 
   filter(rank %in% 1:5)
 
-unique(top_5_food$country)
-
-# Top 50 conso tous produits confondus
-top_5_all <- food_consumption %>% 
+# Top 50 consumption - per country
+top_50_all <- food_consumption %>% 
   group_by(country) %>% 
   summarise(consumption = sum(consumption)) %>% 
   top_n(50, consumption)
 
+# Compenent analysis ------------------------------------------------------
 
-# AFC - all
+# Filter on countries with cos2 > 0.6
 resCA <- CA(afc)
 
 plot1 <- fviz_ca_biplot(resCA, 
                col.row ="steelblue", 
                col.col = "darkred", 
-               #row.size = ,
-               select.row = list(cos2 = 0.6)) + ##69b3a2
+               select.row = list(cos2 = 0.6)) +
   theme_minimal() +
   labs(
     title = "Correspondence Analysis",
@@ -663,13 +580,13 @@ plot1 <- fviz_ca_biplot(resCA,
   theme(
     text = element_text(family = "Gibson", colour = "gray30", size = 24))
 
-# AFC - sélection sur top 5 food
+# Filter on countries with cos2 > 0.5 & on top 5 consumption - per country and food category
 resCA2 <- CA(afc[row.names(afc) %in% top_5_food$country,])
 
 plot2 <- fviz_ca_biplot(resCA2, 
                col.row ="steelblue", 
                col.col = "darkred", 
-               select.row = list(cos2 = 0.5) ##69b3a2
+               select.row = list(cos2 = 0.5) 
 ) +
   theme_minimal() +
   labs(
@@ -679,13 +596,13 @@ plot2 <- fviz_ca_biplot(resCA2,
   theme(
     text = element_text(family = "Gibson", colour = "gray30", size = 24))
 
-# AFC - sélection sur top 50 conso
-resCA3 <- CA(afc[row.names(afc) %in% top_5_all$country,])
+# Filter on countries with cos2 > 0.5 & on top 50 consumption - per country
+resCA3 <- CA(afc[row.names(afc) %in% top_50_all$country,])
 
 plot3 <- fviz_ca_biplot(resCA3, 
                col.row ="steelblue", 
                col.col = "darkred", 
-               select.row = list(cos2 = 0.5) ##69b3a2
+               select.row = list(cos2 = 0.5) 
 ) +
   theme_minimal() +
   labs(
@@ -696,7 +613,7 @@ plot3 <- fviz_ca_biplot(resCA3,
     text = element_text(family = "Gibson", colour = "gray30", size = 24))
 
 
-# export plot
+# export plot 1
 save_plot(
   filename = 'TidyTuesday/outputs/afc1.png',
   plot = plot1,
@@ -704,7 +621,7 @@ save_plot(
   base_width = 15 * 1.61
 )
 
-# export plot
+# export plot 2
 save_plot(
   filename = 'TidyTuesday/outputs/afc2.png',
   plot = plot2,
@@ -713,7 +630,7 @@ save_plot(
 )
 
 
-# export plot
+# export plot 3
 save_plot(
   filename = 'TidyTuesday/outputs/afc3.png',
   plot = plot3,
