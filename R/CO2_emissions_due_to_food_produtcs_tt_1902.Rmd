@@ -1,0 +1,375 @@
+---
+title: "TidyTuesday 19/02 - CO2 emissions due to food products"
+author: "Juliette Bassnagel"
+date: "29/02/2020"
+output: 
+  html_document:
+  theme: paper
+highlight: kate
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = F, message = FALSE, warning = FALSE)
+```
+
+```{r lib}
+library("dplyr") # dataset manipulation
+library("tidylog") # provide feedback about dplyr operations
+library("rnaturalearth") # get world data
+library("ggplot2") # data visualisation
+library("sf") # to simplify maps
+library('echarts4r') # dynamic maps
+library("ggalt") # dumbell chart
+library("forcats") # factor manipulation
+library("tidyr") 
+library("GGally") # parallel coordinate chart
+library("cowplot") # combine plots together / export plots
+library("patchwork")
+library("extrafont")
+```
+
+```{r default}
+
+## ggplot theme
+theme_set(theme_minimal(base_family = "Gibson"))
+
+theme_update(plot.background = element_rect(fill = "gray20", 
+                                            color = "gray20"), 
+             panel.background = element_rect(fill = NA, color = NA),
+             panel.grid = element_blank(),
+             axis.ticks = element_blank(),
+             axis.text = element_blank(),
+             axis.title = element_blank(),
+             strip.text.x = element_blank(),
+             plot.title = element_text(size = 45,
+                                       color = "grey80",
+                                       face = "bold",
+                                       hjust = .5,
+                                       margin = margin(30, 0, 20, 0)),
+             plot.subtitle = element_text(size = 25,
+                                          color = "grey70",
+                                          face = "plain",
+                                          hjust = .5,
+                                          lineheight = 1.05,
+                                          margin = margin(0, 0, 80, 0)),
+             plot.caption = element_text(size = 20,
+                                         color = "grey70",
+                                         face = "bold",
+                                         hjust = .5,
+                                         margin = margin(40, 0, 0, 0)),
+             plot.margin = margin(30, 60, 30, 60),
+             panel.spacing.y = unit(0, "pt"))
+```
+
+```{r data}
+# Load data
+tuesdata <- tidytuesdayR::tt_load('2020-02-18') 
+food_consumption <- tuesdata[[1]]
+
+# Add high level food category and recode USA/Czech Republic/South Korea
+food_consumption <- food_consumption %>% 
+  mutate(category = 
+           case_when(food_category %in% c("Pork", "Poultry", "Beef", "Lamb & Goat") ~ "Meat",
+                     food_category %in% c("Eggs", "Milk - inc. cheese") ~ "Eggs, Milk, Cheese",
+                     food_category == "Fish" ~ "Fish",
+                     food_category %in% c("Wheat and Wheat Products", "Rice", "Soybeans", "Nuts inc. Peanut Butter") ~ "Grains",
+                     ),
+         country = recode_factor (country,
+                                  `USA` = "United States",
+                                  `Czech Republic`= "Czech Rep.",
+                                  `South Korea`= "Korea")  
+         )
+
+# Re-order factors
+food_consumption$category <- factor(food_consumption$category, 
+                                    levels = c("Meat", "Fish", "Eggs, Milk, Cheese", "Grains"))
+
+
+```
+
+```{r}
+# CO2 emission per country
+pollution_per_country <- food_consumption %>% 
+  group_by(country) %>% 
+  summarise(consumption = sum(consumption),
+            co2_emmission = sum(co2_emmission))
+```
+
+```{r}
+# Load world data
+world_map <- ne_countries(scale = "medium", returnclass = "sf") 
+
+# Add world data to the previous dataframe
+food_consumption_map <- merge(
+  x = world_map,
+  y = pollution_per_country,
+  by.x = "name",
+  by.y = "country",
+  all.x = TRUE
+)
+
+# Remove Antartica
+food_consumption_map <- food_consumption_map %>%
+  filter(geounit != "Antarctica")
+
+# Map
+map <- ggplot(data = food_consumption_map) + 
+  geom_sf(mapping = aes(fill = co2_emmission)) +
+  labs(
+    title = "CO2 emissions per person and per country",
+    fill = "CO2 emission\n (kg CO2/person/year)"
+  ) +
+  guides(fill = guide_colorbar(barheight = unit(3, units = "mm"),  
+                                 barwidth = unit(120, units = "mm"),
+                                 direction = "horizontal",
+                                 ticks.colour = "#e8d8c3",
+                                 title.position = "top",
+                                 title.hjust = 0.5)) +
+  theme(
+    legend.position = "bottom",
+    legend.text = element_text(colour = "gray70", size = 20),
+    legend.title = element_text(colour = "gray70", size = 30)
+  ) +
+  annotate("text", 
+           label = "The most polluting\n countries are\n	Argentina, Australia,\n Albania, New Zealand\n and Iceland.", 
+           x = -140, 
+           y = -35, 
+           color = "grey80",
+           size = 12#,
+           #hjust = -1
+           )
+
+  # annotate("text", x = 70, y = 150, family = "Gibson", size = 6, color = "gray90",
+  #          label = "Poultry")
+```
+
+```{r}
+# Focus on top meat consumers ---------------------------------------------
+
+# top 5 countries with cO2 emissions
+top_5 <- pollution_per_country %>%  
+  top_n(5, co2_emmission) %>% 
+  arrange(desc(co2_emmission)) %>% 
+  select(country)
+
+# data preparation
+plot_meat <- food_consumption %>% 
+  filter(category == "Meat") %>% 
+  group_by(country, food_category) %>% 
+  mutate(sum_consumption = sum(consumption),
+         group = ifelse(
+           test = country %in% top_5$country,
+           yes = 0,
+           no = 1
+         )) %>% 
+  select(-co2_emmission, -consumption, -category)
+
+# long to wide
+plot_meat <- spread(
+  data = plot_meat,
+  key = food_category,
+  value = sum_consumption
+)
+
+plot_meat$group <- factor(plot_meat$group)
+
+m <- plot_meat %>%
+  arrange(desc(group)) %>%
+  ggparcoord(
+    columns = 3:6, 
+    groupColumn = 2, 
+    order = "anyClass",
+    showPoints = TRUE, 
+    alphaLines = 1, 
+    scale = "globalminmax" #"uniminmax" #"center" #
+  ) + 
+  geom_point(aes(size = ifelse(group == 0, 0.25, 0.2))) +
+  geom_line(aes(size = ifelse(group == 0, 0.021, 0.01))) +
+  scale_color_manual(values=c( "#56B4E9", "gray50")) +
+   theme(
+     legend.position = "None",
+     axis.text.x = element_text(size = 25, colour = "gray80", angle = 50, hjust = 1)
+   ) +
+  labs(
+    x = "",
+    y = "Consumption (kg/person/year)",
+    title = "",
+    subtitle = "The highlighted lines represent\n the countries with the highest CO2 emissions\n per person and per year."
+  ) +
+  annotate("text", x = "Beef", y = 62, size = 8, color = "#56B4E9",
+           label = "Argentina") +
+  annotate("text", x = "Poultry", y = 52, size = 8, color = "#56B4E9",
+           label = "Australia") +
+  annotate("text", x = "Poultry", y = 10, size = 8, color = "#56B4E9",
+           label = "Albania") +
+  annotate("text", x = "Beef", y = 18, size = 8, color = "#56B4E9",
+           label = "New Zealand") +
+  annotate("text", x = 	"Lamb & Goat", y = 30, size = 8, color = "#56B4E9",
+           label = "Iceland")
+```
+
+```{r}
+# 1 - Meat
+
+c1 <- food_consumption %>%
+  arrange(desc(category)) %>%
+  ggplot(aes(x = consumption,
+             y = co2_emmission,
+             color = category)) +
+  geom_point(size = 1) +
+  labs(
+    x = "Consumption",
+    y = "CO2 emissions"
+  ) +
+  scale_colour_manual(values = c("#56B4E9", "gray60", "gray60", "gray60")) +
+   theme(
+     legend.position = "none",
+     axis.title = element_text(size = 25, color = "gray90"),
+     plot.margin = margin(t = 0, r = 0, b = 0, l = 0, unit = "pt")
+    ) +
+  annotate("text",
+           x = c(15, 55, 40, 130, 250),
+           y = c(700, 1200, 280, 120, 1100),
+           size = c(rep(6, 4), 9),
+           color = "gray90",
+           label = c("Lamb\n & Goat", "Beef", "Pork", "Poultry", "MEAT"))
+
+# 2 - Fish
+
+# reorder factors
+food_consumption_fish <- food_consumption
+food_consumption_fish$category <- factor(food_consumption$category, 
+                                         levels = c("Fish", "Meat", "Eggs, Milk, Cheese", "Grains"))
+
+c2 <- food_consumption_fish %>%
+  arrange(desc(category)) %>%
+  ggplot(aes(x = consumption,
+             y = co2_emmission,
+             color = category)) +
+  geom_point(size = 1) +
+  labs(
+    x = "Consumption",
+    y = "CO2 emissions"
+  ) +
+  scale_colour_manual(values = c("#56B4E9", "gray60", "gray60", "gray60")) +
+   theme(
+     legend.position = "none",
+     axis.title = element_text(size = 25, color = "gray90")
+   ) +
+  annotate("text",
+           x = 250,
+           y = 1100,
+           size = 9,
+           color = "gray90",
+           label = "FISH")
+  
+# 3 - Eggs and Cheese
+
+# reorder factors
+food_consumption_eggs <- food_consumption
+food_consumption_eggs$category <- factor(food_consumption$category, 
+                                         levels = c("Eggs, Milk, Cheese", "Fish", "Meat", "Grains"))
+
+c3 <- food_consumption_eggs %>%
+  arrange(desc(category)) %>%
+  ggplot(aes(x = consumption,
+             y = co2_emmission,
+             color = category)) +
+  geom_point(size = 1) +
+  labs(
+    x = "",
+    y = "CO2 emissions"
+  ) +
+  scale_colour_manual(values = c("#56B4E9", "gray60", "gray60", "gray60")) +
+   theme(
+     legend.position = "none",
+     axis.title = element_text(size = 25, color = "gray90")
+   ) +
+  annotate("text",
+           x = c(300, 40, 250),
+           y = c(550, 20, 1200),
+           size = c(rep(6, 2), 9),
+           color = "gray90",
+           label = c("Milk and cheese", "Eggs", "EGGS, MILK,\n CHEESE"))
+
+# 4 - Grains
+
+food_consumption_grains <- food_consumption
+food_consumption_grains$category <- factor(food_consumption$category, levels = c("Grains", "Fish", "Meat", "Eggs, Milk, Cheese"))
+
+c4 <- food_consumption_grains %>%
+  arrange(desc(category)) %>%
+  ggplot(aes(x = consumption,
+             y = co2_emmission,
+             color = category)) +
+  geom_point(size = 1) +
+  labs(
+    x = "",
+    y = "CO2 emissions"
+  ) +
+  scale_colour_manual(values = c("#56B4E9", "gray60", "gray60", "gray60")) +
+   theme(
+     legend.position = "none",
+     axis.title = element_text(size = 25, color = "gray90")
+   ) +
+    annotate("text",
+           x = c(10, 190, 40, 150, 250),
+           y = c(80, 320, 10, 80, 1100),
+           size = c(rep(6, 4), 9),
+           color = "gray90",
+           label = c("Nuts", "Rice", "Soybeans", "Wheat", "GRAINS"))
+```
+
+```{r}
+title <- ggdraw() + 
+  draw_label("CO2 EMISSIONS DUE TO FOOD PRODUCTS", 
+             fontfamily = "Gibson", 
+             fontface = 'bold',
+             size = 75,
+             colour = "gray90")
+
+# CO2/consumption title
+title2 <- ggdraw() + 
+  draw_label("Relation between CO2\n emission and consumption", 
+             fontfamily = "Gibson", 
+             fontface = 'bold',
+             size = 45,
+             colour = "grey80") 
+
+# CO2/consumption title
+title3 <- ggdraw() + 
+  draw_label("Meat consumption", 
+             fontfamily = "Gibson", 
+             fontface = 'bold',
+             size = 45,
+             colour = "grey80") 
+
+# Source
+source <- ggdraw() + 
+  draw_label("Source: Nu3 | Dataviz: @JulietteBgl", 
+             fontfamily = "Gibson", 
+             fontface = 'plain',
+             size = 20,
+             colour = "gray80")
+```
+
+
+```{r plot, fig.width = 25, fig.height = 30}
+title /
+  map / 
+  
+  ((title3 /
+     m + 
+    plot_layout(heights = c(0.2, 1))) | 
+  (title2 /
+  ((c1 | c2) / (c3 | c4)) + 
+    plot_layout(heights = c(0.2, 1)))) /
+  
+  source + plot_layout(heights = c(0.2, 1, 1, 0.1))
+```
+
+```{r}
+ggsave("co2_emissions", plot = last_plot(),  
+       width = 25, height = 30, device = cairo_pdf,
+       )  
+```
