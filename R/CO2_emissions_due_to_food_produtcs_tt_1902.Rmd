@@ -135,12 +135,8 @@ map <- ggplot(data = food_consumption_map) +
            x = -140, 
            y = -35, 
            color = "grey80",
-           size = 12#,
-           #hjust = -1
+           size = 12
            )
-
-  # annotate("text", x = 70, y = 150, family = "Gibson", size = 6, color = "gray90",
-  #          label = "Poultry")
 ```
 
 ```{r}
@@ -196,16 +192,13 @@ m <- plot_meat %>%
     title = "",
     subtitle = "The highlighted lines represent\n the countries with the highest CO2 emissions\n per person and per year."
   ) +
-  annotate("text", x = "Beef", y = 62, size = 8, color = "#56B4E9",
-           label = "Argentina") +
-  annotate("text", x = "Poultry", y = 52, size = 8, color = "#56B4E9",
-           label = "Australia") +
-  annotate("text", x = "Poultry", y = 10, size = 8, color = "#56B4E9",
-           label = "Albania") +
-  annotate("text", x = "Beef", y = 18, size = 8, color = "#56B4E9",
-           label = "New Zealand") +
-  annotate("text", x = 	"Lamb & Goat", y = 30, size = 8, color = "#56B4E9",
-           label = "Iceland")
+  annotate("text", 
+           x = c("Beef", "Poultry", "Poultry", "Beef", "Lamb & Goat"),
+           y = c(62, 52, 10, 18, 30),
+           label = c("Argentina", "Australia", "Albania", "New Zealand", "Iceland"),
+           size = 8,
+           color = "#56B4E9"
+           )
 ```
 
 ```{r}
