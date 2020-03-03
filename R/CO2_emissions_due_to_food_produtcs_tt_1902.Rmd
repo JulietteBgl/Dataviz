@@ -14,12 +14,9 @@ knitr::opts_chunk$set(echo = FALSE, warning = F, message = FALSE, warning = FALS
 
 ```{r lib}
 library("dplyr") # dataset manipulation
-library("tidylog") # provide feedback about dplyr operations
 library("rnaturalearth") # get world data
 library("ggplot2") # data visualisation
 library("sf") # to simplify maps
-library('echarts4r') # dynamic maps
-library("ggalt") # dumbell chart
 library("forcats") # factor manipulation
 library("tidyr") 
 library("GGally") # parallel coordinate chart
@@ -58,7 +55,7 @@ theme_update(plot.background = element_rect(fill = "gray20",
                                          hjust = .5,
                                          margin = margin(40, 0, 0, 0)),
              legend.position = "none",
-             plot.margin = margin(30, 60, 30, 60),
+             #plot.margin = margin(30, 60, 30, 60),
              panel.spacing.y = unit(0, "pt"))
 ```
 
@@ -75,20 +72,13 @@ food_consumption <- food_consumption %>%
                      food_category == "Fish" ~ "Fish",
                      food_category %in% c("Wheat and Wheat Products", "Rice", "Soybeans", "Nuts inc. Peanut Butter") ~ "Grains",
                      ),
+         category = factor(category, levels = c("Meat", "Fish", "Eggs, Milk, Cheese", "Grains")),
          country = recode_factor (country,
                                   `USA` = "United States",
                                   `Czech Republic`= "Czech Rep.",
                                   `South Korea`= "Korea")  
          )
 
-# Re-order factors
-food_consumption$category <- factor(food_consumption$category, 
-                                    levels = c("Meat", "Fish", "Eggs, Milk, Cheese", "Grains"))
-
-
-```
-
-```{r}
 # CO2 emission per country
 pollution_per_country <- food_consumption %>% 
   group_by(country) %>% 
@@ -96,21 +86,20 @@ pollution_per_country <- food_consumption %>%
             co2_emmission = sum(co2_emmission))
 ```
 
-```{r}
+```{r plots}
+## MAP
+
 # Load world data
 world_map <- ne_countries(scale = "medium", returnclass = "sf") 
 
 # Add world data to the previous dataframe
-food_consumption_map <- merge(
+food_consumption_map <- merge( 
   x = world_map,
   y = pollution_per_country,
   by.x = "name",
   by.y = "country",
   all.x = TRUE
-)
-
-# Remove Antartica
-food_consumption_map <- food_consumption_map %>%
+) %>% 
   filter(geounit != "Antarctica")
 
 # Map
@@ -138,28 +127,23 @@ map <- ggplot(data = food_consumption_map) +
            color = "grey80",
            size = 12
            )
-```
 
-```{r}
 # Focus on top meat consumers ---------------------------------------------
 
 # top 5 countries with cO2 emissions
 top_5 <- pollution_per_country %>%  
-  top_n(5, co2_emmission) %>% 
-  arrange(desc(co2_emmission)) %>% 
-  select(country)
+  top_n(5, co2_emmission) 
 
 # data preparation
 plot_meat <- food_consumption %>% 
   filter(category == "Meat") %>% 
   group_by(country, food_category) %>% 
-  mutate(sum_consumption = sum(consumption),
+  transmute(sum_consumption = sum(consumption),
          group = ifelse(
            test = country %in% top_5$country,
            yes = 0,
            no = 1
-         )) %>% 
-  select(-co2_emmission, -consumption, -category)
+         ))
 
 # long to wide
 plot_meat <- spread(
@@ -199,9 +183,9 @@ m <- plot_meat %>%
            size = 8,
            color = "#56B4E9"
            )
-```
 
-```{r}
+## SCATTER PLOTS
+
 # 1 - Meat
 
 c1 <- food_consumption %>%
@@ -229,11 +213,10 @@ c1 <- food_consumption %>%
 # 2 - Fish
 
 # reorder factors
-food_consumption_fish <- food_consumption
-food_consumption_fish$category <- factor(food_consumption$category, 
+food_consumption$category <- factor(food_consumption$category, 
                                          levels = c("Fish", "Meat", "Eggs, Milk, Cheese", "Grains"))
 
-c2 <- food_consumption_fish %>%
+c2 <- food_consumption %>%
   arrange(desc(category)) %>%
   ggplot(aes(x = consumption,
              y = co2_emmission,
@@ -257,11 +240,10 @@ c2 <- food_consumption_fish %>%
 # 3 - Eggs and Cheese
 
 # reorder factors
-food_consumption_eggs <- food_consumption
-food_consumption_eggs$category <- factor(food_consumption$category, 
+food_consumption$category <- factor(food_consumption$category, 
                                          levels = c("Eggs, Milk, Cheese", "Fish", "Meat", "Grains"))
 
-c3 <- food_consumption_eggs %>%
+c3 <- food_consumption %>%
   arrange(desc(category)) %>%
   ggplot(aes(x = consumption,
              y = co2_emmission,
@@ -284,10 +266,9 @@ c3 <- food_consumption_eggs %>%
 
 # 4 - Grains
 
-food_consumption_grains <- food_consumption
-food_consumption_grains$category <- factor(food_consumption$category, levels = c("Grains", "Fish", "Meat", "Eggs, Milk, Cheese"))
+food_consumption$category <- factor(food_consumption$category, levels = c("Grains", "Fish", "Meat", "Eggs, Milk, Cheese"))
 
-c4 <- food_consumption_grains %>%
+c4 <- food_consumption %>%
   arrange(desc(category)) %>%
   ggplot(aes(x = consumption,
              y = co2_emmission,
@@ -309,7 +290,7 @@ c4 <- food_consumption_grains %>%
            label = c("Nuts", "Rice", "Soybeans", "Wheat", "GRAINS"))
 ```
 
-```{r}
+```{r text}
 title <- ggdraw() + 
   draw_label("CO2 EMISSIONS DUE TO FOOD PRODUCTS", 
              fontfamily = "Gibson", 
@@ -343,7 +324,7 @@ source <- ggdraw() +
 ```
 
 
-```{r plot, fig.width = 25, fig.height = 30}
+```{r final_plot, fig.width = 25, fig.height = 30}
 title /
   map / 
   
@@ -357,7 +338,7 @@ title /
   source + plot_layout(heights = c(0.2, 1, 1, 0.1))
 ```
 
-```{r}
+```{r export_plot}
 ggsave("co2_emissions", plot = last_plot(),  
        width = 25, height = 30, device = cairo_pdf,
        )  
