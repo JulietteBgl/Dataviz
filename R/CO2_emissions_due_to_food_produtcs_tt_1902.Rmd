@@ -57,6 +57,7 @@ theme_update(plot.background = element_rect(fill = "gray20",
                                          face = "bold",
                                          hjust = .5,
                                          margin = margin(40, 0, 0, 0)),
+             legend.position = "none",
              plot.margin = margin(30, 60, 30, 60),
              panel.spacing.y = unit(0, "pt"))
 ```
@@ -183,7 +184,6 @@ m <- plot_meat %>%
   geom_line(aes(size = ifelse(group == 0, 0.021, 0.01))) +
   scale_color_manual(values=c( "#56B4E9", "gray50")) +
    theme(
-     legend.position = "None",
      axis.text.x = element_text(size = 25, colour = "gray80", angle = 50, hjust = 1)
    ) +
   labs(
@@ -216,7 +216,6 @@ c1 <- food_consumption %>%
   ) +
   scale_colour_manual(values = c("#56B4E9", "gray60", "gray60", "gray60")) +
    theme(
-     legend.position = "none",
      axis.title = element_text(size = 25, color = "gray90"),
      plot.margin = margin(t = 0, r = 0, b = 0, l = 0, unit = "pt")
     ) +
@@ -246,7 +245,6 @@ c2 <- food_consumption_fish %>%
   ) +
   scale_colour_manual(values = c("#56B4E9", "gray60", "gray60", "gray60")) +
    theme(
-     legend.position = "none",
      axis.title = element_text(size = 25, color = "gray90")
    ) +
   annotate("text",
@@ -275,7 +273,6 @@ c3 <- food_consumption_eggs %>%
   ) +
   scale_colour_manual(values = c("#56B4E9", "gray60", "gray60", "gray60")) +
    theme(
-     legend.position = "none",
      axis.title = element_text(size = 25, color = "gray90")
    ) +
   annotate("text",
@@ -302,7 +299,6 @@ c4 <- food_consumption_grains %>%
   ) +
   scale_colour_manual(values = c("#56B4E9", "gray60", "gray60", "gray60")) +
    theme(
-     legend.position = "none",
      axis.title = element_text(size = 25, color = "gray90")
    ) +
     annotate("text",
