@@ -324,7 +324,7 @@ source <- ggdraw() +
 ```
 
 
-```{r final_plot, fig.width = 25, fig.height = 30}
+```{r final_plot, fig.width = 25, fig.height = 30} 
 title /
   map / 
   
@@ -336,6 +336,8 @@ title /
     plot_layout(heights = c(0.2, 1)))) /
   
   source + plot_layout(heights = c(0.2, 1, 1, 0.1))
+#1440 large px
+# idée : radar graph avec la pente / coeff de corrélation
 ```
 
 ```{r export_plot}
