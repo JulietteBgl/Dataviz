@@ -16,18 +16,16 @@ knitr::opts_chunk$set(echo = FALSE, warning = F, message = FALSE, warning = FALS
 ```{r lib}
 # Libraries ---------------------------------------------------------------
 
-library("schrute") #the office script data
-library("tidytext")
+library("schrute") # the office script data
+library("tidytext") # sentiment analysis
 library("dplyr") # dataset manipulation
 library("tidylog") # provide feedback about dplyr operations
 library("ggplot2") # data visualisation
 library("stringr") # string manipulation
-library("FactoMineR") # ACP, AFC
-library('factoextra')
-library("fmsb") # Radar charts
+library("FactoMineR") # PCA
+library('factoextra') # PCA formatting
 library("tidyr")
-library("patchwork")
-library("ggplotify") # set ggplot format to the radar chart
+library("patchwork") # combine plots
 library("forcats") # factor manipulation
 library("cowplot")
 library("extrafont")
