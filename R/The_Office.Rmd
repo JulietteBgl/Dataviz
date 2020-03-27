@@ -1,0 +1,515 @@
+---
+title: "The Office"
+author: "Juliette Bassnagel"
+date: "26/03/2020"
+output: 
+  html_document:
+  theme: paper
+highlight: kate
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = F, message = FALSE, warning = FALSE)
+```
+
+
+```{r lib}
+# Libraries ---------------------------------------------------------------
+
+library("schrute") #the office script data
+library("tidytext")
+library("dplyr") # dataset manipulation
+library("tidylog") # provide feedback about dplyr operations
+library("ggplot2") # data visualisation
+library("stringr") # string manipulation
+library("FactoMineR") # ACP, AFC
+library('factoextra')
+library("fmsb") # Radar charts
+library("tidyr")
+library("patchwork")
+library("ggplotify") # set ggplot format to the radar chart
+library("forcats") # factor manipulation
+library("cowplot")
+library("extrafont")
+```
+
+```{r ggplot}
+# ggplot theme ------------------------------------------------------------
+
+theme_set(theme_minimal(base_family = "Gibson"))
+
+theme_update(plot.background = element_rect(fill = "gray20", 
+                                            color = "gray20"), 
+             panel.background = element_rect(fill = NA, color = NA),
+             panel.grid = element_blank(),
+             axis.ticks = element_blank(),
+             axis.text = element_blank(),
+             axis.title = element_blank(),
+             strip.text.x = element_blank(),
+             plot.title = element_text(size = 30,
+                                       color = "grey80",
+                                       face = "plain",
+                                       hjust = .5,
+                                       margin = margin(30, 0, 20, 0)),
+             plot.subtitle = element_text(size = 25,
+                                          color = "grey70",
+                                          face = "plain",
+                                          hjust = .5,
+                                          lineheight = 1.05,
+                                          margin = margin(0, 0, 80, 0)),
+             plot.caption = element_text(size = 20,
+                                         color = "grey70",
+                                         face = "bold",
+                                         hjust = .5,
+                                         margin = margin(40, 0, 0, 0)),
+             legend.position = "none",
+             #plot.margin = margin(30, 60, 30, 60),
+             panel.spacing.y = unit(0, "pt"))
+```
+
+```{r data}
+# Load data ---------------------------------------------------------------
+
+tuesdata <- tidytuesdayR::tt_load('2020-03-17')
+office_ratings <- tuesdata$office_ratings
+
+office <- theoffice
+
+reg_cast <- c("Michael","Dwight","Jim","Pam","Ryan","Andy","Robert","Stanley",'Kevin','Meredith',
+              "Angela", "Oscar","Phyllis","Roy","Jan","Kelly","Toby","Creed","Darryl","Erin","Gabe",
+              "Holly","Nellie","Clark","Pete")
+
+gender <- c(rep("man",3), "woman", rep("man",5), rep("woman",2), "man", "woman", "man", rep("woman",2),
+            rep("man",3), "woman", "man", rep("woman",2),rep("man",2))
+
+char <- data.frame(character = reg_cast, gender)
+
+office_filtered <- office[office$character %in% reg_cast,]
+
+office_filtered <- merge(
+  x = office_filtered, 
+  y = char)
+
+# dialogues et commentaires :
+tidy_dialogue <- office_filtered %>% 
+  unnest_tokens(word, text)
+
+# 2e version avec suppression des commentaires
+
+# supprimer les textes entre crochets []
+# office2 <- office_filtered %>% 
+#   mutate(text = stri_replace_all_regex(text, 
+#                                 "\\[[a-zA-Z0-9]*\\]", 
+#                                 ""))
+
+```
+
+```{r}
+# Differences men / women -------------------------------------------------
+
+# Contributions distribution per episode - per gender
+
+# mean per gender
+mean <- office_filtered %>% 
+  group_by(season, episode, gender) %>% 
+  summarise(n = n()) %>% 
+  group_by(gender) %>% 
+  summarise(mean = mean(n))
+
+# Density plot
+d1 <- office_filtered %>% 
+  group_by(season, episode, gender) %>% 
+  summarise(n = n()) %>% 
+  ggplot(aes(x = n, fill = gender)) +
+  geom_density(alpha = 0.4, size = 0.1) +
+  labs(
+    x = "Number of contributions",
+    y = "Density",
+    fill = "",
+    title = "Number of contributions per episode",
+    color = ""
+  ) +
+  theme(legend.position = "right",
+        legend.text = element_text(size = 40, colour = "grey70")) +
+  geom_vline(data = mean, aes(xintercept = mean, color = gender),
+             linetype = "dashed") +
+  scale_fill_manual(values = c("#4B8BF2", "#B6C0D6")) +
+  scale_color_manual(values = c("#4B8BF2", "#B6C0D6")) +
+  annotate("text", 
+           label = "On average,\n men talk 197 times and\n women talk 66 times \nper episode", 
+           x = 280, 
+           y = 0.01, 
+           color = "grey80",
+           size = 8
+           ) +
+  annotate("text",
+           x = c(215, 85),
+           y = c(0.013, 0.013),
+           size = 8,
+           color = "gray90",
+           fontface = "bold",
+           label = c(round(mean[1,2],1), round(mean[2,2],1)))
+  
+# Distribution of contribution length - men vs women
+
+# mean per gender
+mean <- office_filtered %>% 
+  mutate(nb_words = str_count(text, '\\w+')) %>% 
+  group_by(season, episode, gender) %>%
+  summarise(mean = mean(nb_words)) %>% 
+  group_by(gender) %>%
+  summarise(mean = mean(mean))
+  
+# Density plot
+d2 <- office_filtered %>% 
+  mutate(nb_words = str_count(text, '\\w+')) %>% 
+  group_by(season, episode, gender) %>%
+  summarise(mean = mean(nb_words)) %>% 
+  ggplot(aes(x = mean, fill = gender)) +
+  geom_density(alpha = 0.4, size = 0.1) +
+  labs(
+    x = "Contribution lenght",
+    y = "Density",
+    fill = "",
+    title = "Contribution length per episode"
+  ) +
+  scale_fill_manual(values = c("#4B8BF2", "#B6C0D6")) +
+  geom_vline(data = mean, aes(xintercept = mean, color = gender),
+             linetype = "dashed") +
+  scale_fill_manual(values = c("#4B8BF2", "#B6C0D6")) +
+  scale_color_manual(values = c("#4B8BF2", "#B6C0D6")) +
+  annotate("text", 
+           label = "On average,\n men use 11.8 words and\n women use 9.5 words \nper contribution", 
+           x = 15, 
+           y = 0.2, 
+           color = "grey80",
+           size = 8
+           ) +
+  annotate("text",
+           x = c(12.5, 10),
+           y = c(0.27, 0.27),
+           size = 8,
+           color = "gray90",
+           fontface = "bold",
+           label = c(round(mean[1,2],1), round(mean[2,2],1)))
+
+```
+
+
+```{r}
+# Sentiment analysis ------------------------------------------------------
+
+# Load sentiment dictionary
+nrc_joy <- get_sentiments("nrc") %>% 
+  filter(!sentiment %in% c("positive", "negative"))
+
+# Number of words per sentiment
+tidy_dialogue %>%
+  inner_join(nrc_joy) %>%
+  count(sentiment, sort = TRUE)
+
+# Prepare data for radar charts
+rad_data <- tidy_dialogue %>%
+  inner_join(nrc_joy) %>%
+  mutate(nb_words = n()) %>%
+  group_by(sentiment, nb_words) %>%
+  summarise(nb_words_sent = n()) %>%
+  mutate(perc = nb_words_sent / nb_words) %>%
+  select(sentiment, perc) %>%
+  spread(sentiment, perc)
+  
+# ggradar
+library("ggradar")
+
+rc <- ggradar(rad_data, 
+        font.radar = "Gibson",
+        grid.mid = 0.1,
+        grid.max = 0.2,
+        base.size = 15,
+        values.radar = c("0%", "10%", "20%"),
+        grid.line.width = 0.5,
+        background.circle.colour ="#D7D6D1",
+        gridline.mid.colour = "grey",
+        group.line.width = 1, 
+        group.point.size = 4, 
+        group.colours = "lightblue"
+        ) +
+  theme(plot.background = element_rect(fill = "gray20", color = "gray20"), 
+        panel.background = element_rect(fill = NA, color = NA),
+        text = element_text(colour = "white"))
+
+# lolipop chart
+lolipop <- tidy_dialogue %>%
+  inner_join(nrc_joy) %>%
+  group_by(season, episode, imdb_rating) %>% 
+  mutate(nb_words_ep = n()) %>%
+  group_by(season, episode, imdb_rating, sentiment, nb_words_ep) %>%
+  summarise(nb_words_sent = n()) %>%
+  mutate(perc = nb_words_sent / nb_words_ep * 100) %>%
+  group_by(sentiment) %>% 
+  arrange(sentiment, desc(perc)) %>% 
+  mutate(num = row_number()) %>% 
+  filter(num == 1) %>% 
+  mutate(ep = paste0("S",season,".E", episode)) %>% 
+  select(-season, -episode, -num, -nb_words_ep, -nb_words_sent) %>% 
+  ggplot(
+  mapping = aes(x = fct_reorder(sentiment, perc, .desc = TRUE), y = perc)
+) +
+  geom_point(
+    size = 8,
+    position = position_dodge(width = .8),
+    color = "#4B8BF2"
+  ) +
+  geom_linerange(
+    mapping = aes(ymin = 0, ymax = perc),
+    size = 3,
+    position = position_dodge(width = .8),
+    color = "#4B8BF2"
+  ) +
+  labs(
+    x = "",
+    y = "Sentiment's strength (% of words)",
+    title = "Most representative episode per sentiment",
+    subtitle = "For each sentiment, the episode number and \nits rating are displayed."
+  ) +
+  theme(
+    axis.text = element_text(size = 20,
+                             color = "grey70"), 
+    axis.title = element_text(size = 20,
+                             color = "grey70"),
+    axis.text.x = element_text(angle = 50,
+                             hjust = 1)
+  ) +
+      geom_text(
+      aes(label = paste0(ep, "\n", imdb_rating)),
+      size = 5,
+      color = 'grey70',
+      hjust = 0.5,
+      vjust = -1
+    ) +
+  scale_y_continuous(limits = c(0,35),breaks = seq(0,40,10)) 
+
+# Number of representative episodes for each sentiment
+sentiments_list <- nrc_joy %>% 
+  distinct(sentiment)
+  
+sent <- tidy_dialogue %>%
+  inner_join(nrc_joy) %>%
+  group_by(season, episode) %>% 
+  mutate(nb_words_ep = n()) %>% 
+  group_by(season, episode, sentiment, nb_words_ep) %>% 
+  summarise(nb_words_sent = n()) %>% 
+  mutate(perc = nb_words_sent/nb_words_ep*100) %>% 
+  filter(perc > 12.5) %>% 
+  group_by(sentiment) %>% 
+  summarise(n = n()) %>% 
+  right_join(sentiments_list) %>% 
+  mutate(n = ifelse(is.na(n), 0, n)) %>% 
+  ggplot(mapping = aes(x = fct_reorder(sentiment, n), y = n), color = "grey70") +
+  geom_histogram(stat = "identity") +
+  coord_flip() +
+  labs(
+    x = "",
+    y = "Number of episodes",
+    title = "Number of episodes over represented per sentiment",
+    subtitle = "An episode is considered to be over represented if \n at least 12.5% of its words belong to the sentiment."
+  ) +
+  theme(
+    axis.text.y = element_text(size = 20,
+                             color = "grey70")) +
+      geom_text(
+      aes(label = paste0(n," (", round(n/186*100), "%)")),
+      size = 6,
+      color = 'grey70',
+      hjust = -0.15
+    ) +
+  ylim(0, 210)
+
+```
+
+
+```{r}
+# ACP ---------------------------------------------------------------------
+
+matrix <- tidy_dialogue %>% 
+  group_by(season) %>% 
+  mutate(nb_words_season = n()) %>%
+  filter(gender == "woman") %>% 
+  group_by(season, nb_words_season) %>% 
+  mutate(nb_words_women = n()) %>% 
+  group_by(season, episode, nb_words_season, nb_words_women) %>% 
+  summarise(mean_episodes = mean(imdb_rating, na.rm = T)) %>% 
+  group_by(season, nb_words_season, nb_words_women) %>% 
+  summarise(mean_season = mean(mean_episodes, na.rm = T)) %>% 
+  mutate(perc_words_women = nb_words_women/nb_words_season*100) %>% 
+  select(-nb_words_women)
+
+# Get sentiment data in the right format
+sentiment_data <- tidy_dialogue %>%
+  inner_join(nrc_joy) %>%
+  group_by(season) %>% 
+  mutate(nb_words_season = n()) %>%
+  group_by(season, sentiment, nb_words_season) %>%
+  summarise(nb_words_sent = n()) %>%
+  mutate(perc = nb_words_sent / nb_words_season * 100) %>%
+  select(season, sentiment, perc) %>%
+  spread(sentiment, perc)
+
+matrix <- matrix %>% 
+  left_join(sentiment_data)
+
+names(matrix) <- c("season", "Nb words", "Mean IMDB", "% words women", 
+"Anger", "Anticipation", "Disgust", "Fear", "Joy", "Sadness", 
+"Surprise", "Trust")
+
+acp <- PCA(X = matrix[,-1], graph = FALSE)
+
+acp_var <- fviz_pca_var(acp, 
+                        col.var = "grey",
+                        title = 'Variables',
+                        labelsize = 8,
+                        repel = TRUE,
+                        axes.linetype = NA) +
+  theme(axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title.x = element_text(size = 15, colour = "grey70", family = "Gibson"),
+        axis.title.y = element_text(size = 15, colour = "grey70", family = "Gibson"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        plot.title = element_text(size = 30,
+                                       color = "grey80",
+                                  family = "Gibson",
+                                       face = "plain",
+                                       hjust = .5,
+                                       margin = margin(30, 0, 20, 0))) +
+  geom_vline(xintercept = 0, color = "grey70", linetype = "dashed", family = "Gibson") +
+  geom_hline(yintercept = 0, color = "grey70", linetype = "dashed", family = "Gibson")
+
+acp_ind <- fviz_pca_ind(acp,
+             geom.ind = c("point", "text"),
+             pointsize = 4,
+             labelsize = 10,
+             repel = TRUE,
+             col.ind = matrix$`Mean IMDB`,
+             gradient.cols = c("#FC4E07", "#E7B800", "darkgreen"),
+             legend.title = "IMDB rating",
+             title = 'Seasons',
+             axes.linetype = NA
+             ) +
+  theme(axis.line = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        panel.background = element_blank(),
+        panel.border = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        plot.background = element_blank(),
+        legend.text = element_text(size = 15, colour = "grey70", family = "Gibson"),
+        legend.title = element_text(size = 20, colour = "grey70", family = "Gibson"),
+        plot.title = element_text(size = 30,
+                                  family = "Gibson",
+                                       color = "grey80",
+                                       face = "plain",
+                                       hjust = .5,
+                                       margin = margin(30, 0, 20, 0))) +
+  geom_vline(xintercept = 0, color = "grey70", linetype = "dashed") +
+  geom_hline(yintercept = 0, color = "grey70", linetype = "dashed") +
+  annotate("text", 
+           label = "Season 8:\n First season\n without Steve Carell\n as Michael Scott", 
+           x = 1.2, 
+           y = -2.6, 
+           color = "grey80",
+           size = 6
+           )
+  
+
+```
+
+```{r final_plot, fig.width = 25, fig.height = 31}
+# Combine plots -----------------------------------------------------------
+
+# Main title
+title <- ggdraw() + 
+  draw_label("THE OFFICE (AMERICAN TV SERIE)", 
+             fontfamily = "Gibson", 
+             fontface = 'bold',
+             size = 75,
+             colour = "gray90")
+
+titleB <- ggdraw() + 
+  draw_label("DIALOGUE ANALYSIS", 
+             fontfamily = "Gibson", 
+             fontface = 'italic',
+             size = 40,
+             colour = "gray90")
+
+# Women section title
+title2 <- ggdraw() +
+  draw_label("1. WOMEN'S ROLE",
+             fontfamily = "Gibson",
+             fontface = 'bold',
+             size = 45,
+             colour = "grey80")
+
+# Sentiment analysis title
+title3 <- ggdraw() +
+  draw_label("2. SENTIMENT ANALYSIS",
+             fontfamily = "Gibson",
+             fontface = 'bold',
+             size = 45,
+             colour = "grey80")
+
+# Factor analysis
+title4 <- ggdraw() +
+  draw_label("3. PRINCIPAL COMPONENTS ANALYSIS",
+             fontfamily = "Gibson",
+             fontface = 'bold',
+             size = 45,
+             colour = "grey80")
+
+# MFG logo
+logo <- png::readPNG("../assets/MFG white logo.png")
+
+# Comments - Factor analysis
+comments <- ggdraw() +
+  draw_label("Well rated seasons are the ones with\n both surprise and anticipation\n sentiments.\n\n On the other hand, seasons that bring fear\n and disgust have a lower rating.\n\n The first season stands out with its\n higher level of joy and trust.",
+             fontfamily = "Gibson",
+             #fontface = 'bold',
+             size = 25,
+             colour = "grey80") +
+  #draw_image(logo#, x = 0, y = 0, scale = 1
+             #) # doesn't work -- package magik ? to check
+  draw_image("../assets/MFG white logo.png")
+
+# Source
+source <- ggdraw() + 
+  draw_label("Source: schrute | Dataviz: @JulietteBgl", 
+             fontfamily = "Gibson", 
+             fontface = 'plain',
+             size = 20,
+             colour = "gray80") 
+
+
+title /
+  titleB /
+  title2 /
+  (d1 | d2) / 
+  title3 /
+  (lolipop | sent )/ #rc
+  title4 /
+  (acp_var | comments | acp_ind) /
+  source + plot_layout(heights = c(0.3, 0.2, 0.2, 1, 0.2, 1, 0.2, 1, 0.1))
+```
+
+```{r}
+ggsave("the_office.pdf", plot = last_plot(),  
+       width = 25, height = 31, device = cairo_pdf) 
+
+ ggsave("the_office.png", plot = last_plot(),  
+        width = 25, height = 31, type = "cairo-png") 
+```
+
