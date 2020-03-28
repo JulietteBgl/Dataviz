@@ -29,6 +29,7 @@ library("patchwork") # combine plots
 library("forcats") # factor manipulation
 library("cowplot")
 library("extrafont")
+library("magick") # add image in charts
 ```
 
 ```{r ggplot}
@@ -362,6 +363,9 @@ names(matrix) <- c("season", "Nb words", "Mean IMDB", "% words women",
 
 acp <- PCA(X = matrix[,-1], graph = FALSE)
 
+# MFG logo
+logo <- image_read('../assets/MFG white logo.png')
+
 acp_var <- fviz_pca_var(acp, 
                         col.var = "grey",
                         title = 'Variables',
@@ -382,7 +386,11 @@ acp_var <- fviz_pca_var(acp,
                                        hjust = .5,
                                        margin = margin(30, 0, 20, 0))) +
   geom_vline(xintercept = 0, color = "grey70", linetype = "dashed", family = "Gibson") +
-  geom_hline(yintercept = 0, color = "grey70", linetype = "dashed", family = "Gibson")
+  geom_hline(yintercept = 0, color = "grey70", linetype = "dashed", family = "Gibson") +
+  # add mfg logo
+  draw_image(logo, x = -1.1, y = -1.5,
+    width = 0.25)
+
 
 acp_ind <- fviz_pca_ind(acp,
              geom.ind = c("point", "text"),
@@ -469,19 +477,12 @@ title4 <- ggdraw() +
              size = 45,
              colour = "grey80")
 
-# MFG logo
-logo <- png::readPNG("../assets/MFG white logo.png")
-
 # Comments - Factor analysis
 comments <- ggdraw() +
   draw_label("Well rated seasons are the ones with\n both surprise and anticipation\n sentiments.\n\n On the other hand, seasons that bring fear\n and disgust have a lower rating.\n\n The first season stands out with its\n higher level of joy and trust.",
              fontfamily = "Gibson",
-             #fontface = 'bold',
              size = 25,
-             colour = "grey80") +
-  #draw_image(logo#, x = 0, y = 0, scale = 1
-             #) # doesn't work -- package magik ? to check
-  draw_image("../assets/MFG white logo.png")
+             colour = "grey80")
 
 # Source
 source <- ggdraw() + 
@@ -490,7 +491,6 @@ source <- ggdraw() +
              fontface = 'plain',
              size = 20,
              colour = "gray80") 
-
 
 title /
   titleB /
@@ -507,7 +507,7 @@ title /
 ggsave("the_office.pdf", plot = last_plot(),  
        width = 25, height = 31, device = cairo_pdf) 
 
- ggsave("the_office.png", plot = last_plot(),  
-        width = 25, height = 31, type = "cairo-png") 
+ # ggsave("the_office.png", plot = last_plot(),  
+ #        width = 25, height = 31, type = "cairo-png") 
 ```
 
