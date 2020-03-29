@@ -20,6 +20,7 @@ library("schrute") # the office script data
 library("tidytext") # sentiment analysis
 library("dplyr") # dataset manipulation
 library("ggplot2") # data visualisation
+library("stringi") # string manipulation
 library("stringr") # string manipulation
 library("FactoMineR") # PCA
 library('factoextra') # PCA formatting
@@ -88,12 +89,19 @@ office_filtered <- merge(
   x = office_filtered, 
   y = char)
 
-# Removing comments that are not part of dialogues
+# Putting all comments in the same format
+office_filtered <- office_filtered %>% 
+  mutate(text = stri_replace_all_fixed(str = text, "(", "["),
+         text = stri_replace_all_fixed(str = text, "{", "["),
+         text = stri_replace_all_fixed(str = text, ")", "]"),
+         text = stri_replace_all_fixed(str = text, "}", "]")
+         )
 
-# office_filtered <- office_filtered %>% 
-#   mutate(text = stri_replace_all_regex(text, 
-#                                 "\\[[a-zA-Z0-9]*\\]", 
-#                                 ""))
+# Removing comments that are not part of dialogues
+office_filtered <- office_filtered %>% 
+  mutate(text = stri_replace_all_regex(text, 
+                                       "\\[[a-zA-Z0-9]*\\]", 
+                                       ""))
 
 # Dialogues
 tidy_dialogue <- office_filtered %>% 
@@ -365,7 +373,7 @@ acp <- PCA(X = matrix[,-1], graph = FALSE)
 acp_var <- fviz_pca_var(acp, 
                         col.var = "grey",
                         title = 'Variables',
-                        labelsize = 8,
+                        labelsize = 7,
                         repel = TRUE,
                         axes.linetype = NA) +
   theme(axis.text.x = element_blank(),
@@ -501,7 +509,7 @@ title /
   (lolipop | sent )/
   title4 /
   (acp_var | comments | acp_ind) /
-  source + plot_layout(heights = c(0.3, 0.2, 0.2, 1, 0.2, 1, 0.2, 1, 0.2))
+  source + plot_layout(heights = c(0.3, 0.2, 0.2, 1, 0.2, 1, 0.2, 1, 0.3))
 ```
 
 ```{r}
@@ -511,6 +519,5 @@ ggsave("the_office.pdf", plot = last_plot(),
  # ggsave("the_office.png", plot = last_plot(),  
  #        width = 25, height = 31, type = "cairo-png") 
 
-sessionInfo()
 ```
 
