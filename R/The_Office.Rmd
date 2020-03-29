@@ -19,7 +19,6 @@ knitr::opts_chunk$set(echo = FALSE, warning = F, message = FALSE, warning = FALS
 library("schrute") # the office script data
 library("tidytext") # sentiment analysis
 library("dplyr") # dataset manipulation
-library("tidylog") # provide feedback about dplyr operations
 library("ggplot2") # data visualisation
 library("stringr") # string manipulation
 library("FactoMineR") # PCA
@@ -89,17 +88,16 @@ office_filtered <- merge(
   x = office_filtered, 
   y = char)
 
-# dialogues et commentaires :
-tidy_dialogue <- office_filtered %>% 
-  unnest_tokens(word, text)
+# Removing comments that are not part of dialogues
 
-# 2e version avec suppression des commentaires
-
-# supprimer les textes entre crochets []
-# office2 <- office_filtered %>% 
+# office_filtered <- office_filtered %>% 
 #   mutate(text = stri_replace_all_regex(text, 
 #                                 "\\[[a-zA-Z0-9]*\\]", 
 #                                 ""))
+
+# Dialogues
+tidy_dialogue <- office_filtered %>% 
+  unnest_tokens(word, text)
 
 ```
 
@@ -277,7 +275,8 @@ lolipop <- tidy_dialogue %>%
     axis.title = element_text(size = 20,
                              color = "grey70"),
     axis.text.x = element_text(angle = 50,
-                             hjust = 1)
+                             hjust = 1),
+    plot.margin = margin(l = 40)
   ) +
       geom_text(
       aes(label = paste0(ep, "\n", imdb_rating)),
@@ -363,9 +362,6 @@ names(matrix) <- c("season", "Nb words", "Mean IMDB", "% words women",
 
 acp <- PCA(X = matrix[,-1], graph = FALSE)
 
-# MFG logo
-logo <- image_read('../assets/MFG white logo.png')
-
 acp_var <- fviz_pca_var(acp, 
                         col.var = "grey",
                         title = 'Variables',
@@ -386,11 +382,7 @@ acp_var <- fviz_pca_var(acp,
                                        hjust = .5,
                                        margin = margin(30, 0, 20, 0))) +
   geom_vline(xintercept = 0, color = "grey70", linetype = "dashed", family = "Gibson") +
-  geom_hline(yintercept = 0, color = "grey70", linetype = "dashed", family = "Gibson") +
-  # add mfg logo
-  draw_image(logo, x = -1.1, y = -1.5,
-    width = 0.25)
-
+  geom_hline(yintercept = 0, color = "grey70", linetype = "dashed", family = "Gibson") 
 
 acp_ind <- fviz_pca_ind(acp,
              geom.ind = c("point", "text"),
@@ -399,7 +391,7 @@ acp_ind <- fviz_pca_ind(acp,
              repel = TRUE,
              col.ind = matrix$`Mean IMDB`,
              gradient.cols = c("#FC4E07", "#E7B800", "darkgreen"),
-             legend.title = "IMDB rating",
+             legend.title = "IMDB\n rating",
              title = 'Seasons',
              axes.linetype = NA
              ) +
@@ -421,7 +413,9 @@ acp_ind <- fviz_pca_ind(acp,
                                        color = "grey80",
                                        face = "plain",
                                        hjust = .5,
-                                       margin = margin(30, 0, 20, 0))) +
+                                       margin = margin(30, 0, 20, 0)),
+    plot.margin = margin(r = 30)
+        ) +
   geom_vline(xintercept = 0, color = "grey70", linetype = "dashed") +
   geom_hline(yintercept = 0, color = "grey70", linetype = "dashed") +
   annotate("text", 
@@ -484,23 +478,30 @@ comments <- ggdraw() +
              size = 25,
              colour = "grey80")
 
+
+# MFG logo
+logo <- image_read('../assets/MFG white logo.png')
+
 # Source
 source <- ggdraw() + 
   draw_label("Source: schrute | Dataviz: @JulietteBgl", 
              fontfamily = "Gibson", 
              fontface = 'plain',
              size = 20,
-             colour = "gray80") 
+             colour = "gray80") +
+  draw_image(logo, x = 0.55, y = 0.05,
+    width = 0.13, height = 0.2,
+    hjust = 1)
 
 title /
   titleB /
   title2 /
   (d1 | d2) / 
   title3 /
-  (lolipop | sent )/ #rc
+  (lolipop | sent )/
   title4 /
   (acp_var | comments | acp_ind) /
-  source + plot_layout(heights = c(0.3, 0.2, 0.2, 1, 0.2, 1, 0.2, 1, 0.1))
+  source + plot_layout(heights = c(0.3, 0.2, 0.2, 1, 0.2, 1, 0.2, 1, 0.2))
 ```
 
 ```{r}
@@ -509,5 +510,7 @@ ggsave("the_office.pdf", plot = last_plot(),
 
  # ggsave("the_office.png", plot = last_plot(),  
  #        width = 25, height = 31, type = "cairo-png") 
+
+sessionInfo()
 ```
 
