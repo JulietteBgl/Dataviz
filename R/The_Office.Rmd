@@ -21,7 +21,6 @@ library("tidytext") # sentiment analysis
 library("dplyr") # dataset manipulation
 library("ggplot2") # data visualisation
 library("stringi") # string manipulation
-library("stringr") # string manipulation
 library("FactoMineR") # PCA
 library('factoextra') # PCA formatting
 library("tidyr")
@@ -159,7 +158,7 @@ d1 <- office_filtered %>%
 
 # mean per gender
 mean <- office_filtered %>% 
-  mutate(nb_words = str_count(text, '\\w+')) %>% 
+  mutate(nb_words = stri_count_regex(text, '\\w+')) %>% 
   group_by(season, episode, gender) %>%
   summarise(mean = mean(nb_words)) %>% 
   group_by(gender) %>%
@@ -167,7 +166,7 @@ mean <- office_filtered %>%
   
 # Density plot
 d2 <- office_filtered %>% 
-  mutate(nb_words = str_count(text, '\\w+')) %>% 
+  mutate(nb_words = stri_count_regex(text, '\\w+')) %>% 
   group_by(season, episode, gender) %>%
   summarise(mean = mean(nb_words)) %>% 
   ggplot(aes(x = mean, fill = gender)) +
