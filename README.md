@@ -1,3 +1,3 @@
 <h1 style="font-weight:normal" align="center">
-  &nbsp;#Dataviz&nbsp;
+  &nbsp;My dataviz&nbsp;
 </h1>
