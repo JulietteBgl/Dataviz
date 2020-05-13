@@ -6,6 +6,7 @@
 
 ### [Apple Mobility Trends](https://github.com/JulietteBgl/Dataviz/blob/master/R/Apple_mobility_trends.Rmd)
 ![./plots/walking.gif](https://raw.githubusercontent.com/JulietteBgl/Dataviz/master/plots/walking.gif)
+![./plots/driving.gif](https://raw.githubusercontent.com/JulietteBgl/Dataviz/master/plots/driving.gif)
 
 ***
 
