@@ -1,0 +1,362 @@
+---
+title: "France"
+author: "Juliette Bassnagel"
+date: "26/03/2020"
+output: 
+  html_document:
+  theme: paper
+highlight: kate
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = F, message = FALSE, warning = FALSE)
+```
+
+```{r}
+# Libraries ---------------------------------------------------------------
+library("data.table") # dataset manipulation
+library("gganimate")
+library("forcats")
+library("ggimage")
+library("ggplot2") # data visualisation
+library("stringr") # string manipulation
+
+```
+
+```{r}
+# ggplot theme ------------------------------------------------------------
+
+theme_set(theme_minimal(base_family = "Gibson"))
+
+theme_update(plot.background = element_rect(fill = "gray20", 
+                                            color = "gray20"), 
+             panel.background = element_rect(fill = NA, color = NA),
+             panel.grid = element_blank(),
+             panel.grid.major.x = element_line(color = "grey60",
+                                              size = 0.2),
+             axis.ticks.x = element_blank(),
+             axis.text.x = element_text(size = 16, color = "grey80"),
+             axis.ticks.y = element_blank(),
+             axis.text.y = element_blank(),
+             axis.title = element_blank(),
+             strip.text.x = element_blank(),
+             plot.title = element_text(size = 30,
+                                       color = "grey80",
+                                       face = "plain",
+                                       hjust = .5,
+                                       margin = margin(30, 0, 20, 0)),
+             plot.subtitle = element_text(size = 22,
+                                          color = "grey70",
+                                          face = "italic",
+                                          hjust = .5,
+                                          lineheight = 1.05,
+                                          margin = margin(0, 0, 80, 0)),
+             plot.caption = element_text(size = 16,
+                                         color = "grey80",
+                                         hjust = .5,
+                                         margin = margin(40, 0, 0, 0)),
+             legend.position = "none",
+             panel.border = element_blank(),
+             panel.spacing.y = unit(0, "pt"))
+
+```
+
+```{r}
+# Load data ---------------------------------------------------------------
+
+mobility <- fread("../data/applemobilitytrends-2020-04-15.csv")
+mobility$`2020-01-13` <- as.numeric(mobility$`2020-01-13`)
+```
+
+
+```{r}
+# Walking data ------------------------------------------------------------
+
+# Filter on transportation type 
+country_walking <- mobility[transportation_type == "walking"]
+
+# Variables selection
+country_walking[, c("geo_type", "transportation_type") := NULL]
+
+#' Instead of having one variable per date, it's easier to work with a variable "date" that
+#' has all the different dates. (wide to long)
+country_walking <- melt(country_walking, 
+             id.vars = "region",
+             measure.vars = c(2:95),
+             variable.name = "date",
+             value.name = "walking_value")
+
+country_walking$date <- as.Date(country_walking$date)
+
+# Mean per country and per week
+country_walking[, week_number := strftime(country_walking$date, format = "%V")][, mean := mean(walking_value), by = .(region, week_number)]
+
+# We only keep the first date of the week (monday)
+setorderv(country_walking, cols = c("week_number", "date"), c(1, 1))
+country_walking <- country_walking[
+  , index := 1:.N, 
+  by = .(region, week_number)
+  ][index == 1]
+
+# We use week 16 to calculate the comparison with Jan, 13th
+country_walking <- country_walking[week_number == 16, .(region, date, mean)]
+
+# Filter on some countries
+europe <- c("Austria", "Belgium", "Finland", "France", "Germany", "Ireland", "Italy",   
+  "Netherlands", "Norway", "Portugal","Spain", "Sweden", "Switzerland", "UK")
+
+country_walking <- country_walking[region %in% europe]
+
+# add region_id
+country_walking[, region_id := c(1:14)]
+
+# To control gif speed, I add quantile 
+country_walking[, inter0 := 0]
+country_walking[, inter5 := ifelse(mean >= 5, 5, mean)]
+country_walking[, inter10 := ifelse(mean >= 10, 10, mean)]
+country_walking[, inter15 := ifelse(mean >= 15, 15, mean)]
+country_walking[, inter20 := ifelse(mean >= 20, 20, mean)]
+country_walking[, inter25 := ifelse(mean >= 25, 25, mean)]
+country_walking[, inter30 := ifelse(mean >= 30, 30, mean)]
+country_walking[, inter35 := ifelse(mean >= 35, 35, mean)]
+country_walking[, inter40 := ifelse(mean >= 40, 40, mean)]
+country_walking[, inter45 := ifelse(mean >= 45, 45, mean)]
+country_walking[, inter50 := ifelse(mean >= 50, 50, mean)]
+country_walking[, inter55 := ifelse(mean >= 55, 55, mean)]
+country_walking[, inter60 := ifelse(mean >= 60, 60, mean)]
+country_walking[, inter65 := ifelse(mean >= 65, 65, mean)]
+country_walking[, inter70 := ifelse(mean >= 70, 70, mean)]
+country_walking[, inter75 := ifelse(mean >= 75, 75, mean)]
+country_walking[, inter80 := ifelse(mean >= 80, 80, mean)]
+country_walking[, inter85 := ifelse(mean >= 85, 85, mean)]
+country_walking[, inter90 := ifelse(mean >= 90, 90, mean)]
+country_walking[, inter95 := ifelse(mean >= 95, 95, mean)]
+
+country_walking <- melt(country_walking, 
+             id.vars = c("region", "date", "mean", "region_id"),
+             measure.vars = c(5:24),
+             variable.name = "state")
+
+country_walking[, state := as.numeric(str_sub(state, 6))]
+
+# removing na values
+country_walking <- country_walking[!is.na(state)]
+```
+
+
+```{r, fig.width = 16, fig.height = 10}
+
+walk <- here::here("Gallery/assets", "walk3.png")
+
+walking <- ggplot(data = country_walking, 
+         mapping = aes(region_id, value, group = region_id)) +
+    annotate("segment", 
+             x = -Inf, xend = Inf,
+             y = 0, yend = 0,
+             color = "grey80",
+             size = 1.5) +
+    geom_segment(aes(x = region_id, xend = region_id,
+                     y = -0.3, yend = value),
+                 size = 4, color = "lightgreen", alpha = .8) +
+    geom_image(aes(region_id + 0.4, value - 2.5, image = walk), 
+               size = 0.03, 
+               asp = 1.8) +
+    geom_text(aes(x = region_id, y = -5, label = region),
+              color = "grey80",
+              hjust = 1,
+              size = 8,
+              fontface = "bold") +
+    scale_x_continuous(expand = c(0.05, 0.05)) +
+    scale_y_continuous(limits = c(-19, 102), 
+                       expand = c(0.001, 0.001),
+                       breaks = seq(0, 100, by = 10),
+                       labels = function(value) paste0(value, "%")) + 
+    coord_flip() + 
+
+      labs(x = NULL, y = NULL,
+           title = "Impact du confinement sur les déplacements à pied, par pays",
+           subtitle = "Les évolutions présentées ci-dessous reflètent le pourcentage de requêtes de trajet piéton\n sur Apple Maps sur la semaine du 13 avril 2020, par rapport au 13 janvier 2020.",
+           caption = "\n\nVisualization by @JulietteBgl"
+           ) +
+  transition_reveal(state)
+
+animate(walking, 
+        width = 1300, 
+        height = 950,
+        fps = 20,
+        duration = 10,
+        end_pause = 10)
+
+anim_save("../outputs/walking.gif", animation = last_animation())
+```
+
+
+```{r}
+# Driving data ------------------------------------------------------------
+
+# Filter on transportation type 
+country_driving <- mobility[transportation_type == "driving"]
+
+# Variables selection
+country_driving[, c("geo_type", "transportation_type") := NULL]
+
+#' Instead of having one variable per date, it's easier to work with a variable "date" that
+#' has all the different dates. (wide to long)
+country_driving <- melt(country_driving, 
+             id.vars = "region",
+             measure.vars = c(2:95),
+             variable.name = "date",
+             value.name = "driving_value")
+
+country_driving$date <- as.Date(country_driving$date)
+
+# Mean per country and per week
+country_driving[, week_number := strftime(country_driving$date, format = "%V")][, mean := mean(driving_value), by = .(region, week_number)]
+
+# We only keep the first date of the week (monday)
+setorderv(country_driving, cols = c("week_number", "date"), c(1, 1))
+country_driving <- country_driving[, index := 1:.N, by = .(region, week_number)][index == 1]
+
+# We use week 16 to calculate the comparison with Jan, 13th
+country_driving <- country_driving[week_number == 16, .(region, date, mean)]
+
+# Filter on some countries
+europe <- c("Austria", "Belgium", "Finland", "France", "Germany", "Ireland", "Italy",   
+  "Netherlands", "Norway", "Portugal","Spain", "Sweden", "Switzerland", "UK")
+
+country_driving <- country_driving[region %in% europe]
+
+# add region_id
+country_driving[, region_id := c(1:14)]
+
+# Ajout variables intermédiaires
+country_driving[, inter0 := 0]
+country_driving[, inter5 := ifelse(mean >= 5, 5, mean)]
+country_driving[, inter10 := ifelse(mean >= 10, 10, mean)]
+country_driving[, inter15 := ifelse(mean >= 15, 15, mean)]
+country_driving[, inter20 := ifelse(mean >= 20, 20, mean)]
+country_driving[, inter25 := ifelse(mean >= 25, 25, mean)]
+country_driving[, inter30 := ifelse(mean >= 30, 30, mean)]
+country_driving[, inter35 := ifelse(mean >= 35, 35, mean)]
+country_driving[, inter40 := ifelse(mean >= 40, 40, mean)]
+country_driving[, inter45 := ifelse(mean >= 45, 45, mean)]
+country_driving[, inter50 := ifelse(mean >= 50, 50, mean)]
+country_driving[, inter55 := ifelse(mean >= 55, 55, mean)]
+country_driving[, inter60 := ifelse(mean >= 60, 60, mean)]
+country_driving[, inter65 := ifelse(mean >= 65, 65, mean)]
+country_driving[, inter70 := ifelse(mean >= 70, 70, mean)]
+country_driving[, inter75 := ifelse(mean >= 75, 75, mean)]
+country_driving[, inter80 := ifelse(mean >= 80, 80, mean)]
+country_driving[, inter85 := ifelse(mean >= 85, 85, mean)]
+country_driving[, inter90 := ifelse(mean >= 90, 90, mean)]
+country_driving[, inter95 := ifelse(mean >= 95, 95, mean)]
+
+# wide to long again
+country_driving <- melt(country_driving, 
+             id.vars = c("region", "date", "mean", "region_id"),
+             measure.vars = c(5:24),
+             variable.name = "state")
+
+country_driving[, state := as.numeric(str_sub(state, 6))]
+
+# suppression lignes ou state == NULL
+country_driving <- country_driving[!is.na(state)]
+```
+
+
+```{r, fig.width = 16, fig.height = 10}
+
+car <- here::here("Gallery/assets", "car.png")
+
+driving <- ggplot(data = country_driving,
+                  mapping = aes(region_id, value, group = region_id)) +
+  annotate(
+    "segment",
+    x = -Inf,
+    xend = Inf,
+    y = 0,
+    yend = 0,
+    color = "grey80",
+    size = 1.5
+  ) +
+  geom_segment(
+    aes(
+      x = region_id,
+      xend = region_id,
+      y = 0.3, #-0.3,
+      yend = value
+    ),
+    size = 10,
+    color = "grey30",
+    alpha = 0.4
+  ) +
+  geom_segment(
+    aes(
+      x = region_id - 0.25,
+      xend = region_id - 0.25,
+      y = -0.3,
+      yend = value
+    ),
+    size = 0.3,
+    color = "grey80"
+  ) +
+  geom_segment(
+    aes(
+      x = region_id + 0.25,
+      xend = region_id + 0.25,
+      y = -0.3,
+      yend = value
+    ),
+    size = 0.3,
+    color = "grey80"
+  ) +
+  geom_segment(
+    aes(
+      x = region_id,
+      xend = region_id,
+      y = -0.3,
+      yend = value
+    ),
+    size = 0.3,
+    color = "grey80",
+    linetype = "dashed"
+  ) +
+  geom_image(aes(region_id, value + 1.5, image = car),
+             size = 0.03,
+             asp = 1.8
+             ) +
+  geom_text(
+    aes(x = region_id, y = -5, label = region),
+    color = "grey80",
+    hjust = 1,
+    size = 8,
+    fontface = "bold"
+  ) +
+  scale_x_continuous(expand = c(0.05, 0.05)) +
+  scale_y_continuous(
+    limits = c(-19, 102),
+    expand = c(0.001, 0.001),
+    breaks = seq(0, 100, by = 10),
+    labels = function(value) paste0(value, "%")
+  ) +
+  coord_flip() +
+  labs(
+    x = NULL,
+    y = NULL,
+    title = "Impact du confinement sur les déplacements en voiture, par pays",
+    subtitle = "Les évolutions présentées ci-dessous reflètent le pourcentage de requêtes de trajet en voiture\n sur Apple Maps sur la semaine du 13 avril 2020, par rapport au 13 janvier 2020.",
+    caption = "\n\nVisualization by @JulietteBgl"
+  ) +
+  transition_reveal(state)
+
+animate(driving, 
+        width = 1300, 
+        height = 950,
+        fps = 20, 
+        duration = 10,
+        end_pause = 10)
+
+anim_save("../outputs/driving.gif", animation = last_animation())
+```
+
+
