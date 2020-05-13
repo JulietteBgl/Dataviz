@@ -1,5 +1,5 @@
 ---
-title: "France"
+title: "Apple Mobility Trends"
 author: "Juliette Bassnagel"
 date: "26/03/2020"
 output: 
